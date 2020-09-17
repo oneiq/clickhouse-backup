@@ -20,6 +20,7 @@ type Config struct {
 	API        APIConfig        `yaml:"api"`
 	FTP        FTPConfig        `yaml:"ftp"`
 	AzureBlob  AzureBlobConfig  `yaml:"azblob"`
+	Dir        DirConfig        `yaml:"dir"`
 }
 
 // GeneralConfig - general setting section
@@ -38,6 +39,13 @@ type GCSConfig struct {
 	Path              string `yaml:"path" envconfig:"GCS_PATH"`
 	CompressionLevel  int    `yaml:"compression_level" envconfig:"GCS_COMPRESSION_LEVEL"`
 	CompressionFormat string `yaml:"compression_format" envconfig:"GCS_COMPRESSION_FORMAT"`
+}
+
+// DirConfig - directory settings section
+type DirConfig struct {
+	Path              string `yaml:"path" envconfig:"DIR_PATH"`
+	CompressionLevel  int    `yaml:"compression_level" envconfig:"DIR_COMPRESSION_LEVEL"`
+	CompressionFormat string `yaml:"compression_format" envconfig:"DIR_COMPRESSION_FORMAT"`
 }
 
 // AzureBlobConfig - Azure Blob settings section
@@ -179,6 +187,10 @@ func DefaultConfig() *Config {
 				"system.*",
 			},
 			Timeout: "5m",
+		},
+		Dir: DirConfig{
+			CompressionLevel:  1,
+			CompressionFormat: "gzip",
 		},
 		AzureBlob: AzureBlobConfig{
 			EndpointSuffix:    "core.windows.net",
