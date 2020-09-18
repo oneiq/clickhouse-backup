@@ -31,43 +31,44 @@ type GeneralConfig struct {
 	BackupsToKeepRemote int    `yaml:"backups_to_keep_remote"`
 }
 
-// GCSConfig - GCS settings section
-type GCSConfig struct {
-	CredentialsFile   string `yaml:"credentials_file"`
-	CredentialsJSON   string `yaml:"credentials_json"`
-	Bucket            string `yaml:"bucket"`
+type DestinationConfig struct {
 	Path              string `yaml:"path"`
 	CompressionLevel  int    `yaml:"compression_level"`
 	CompressionFormat string `yaml:"compression_format"`
+}
+
+// GCSConfig - GCS settings section
+type GCSConfig struct {
+	DestinationConfig        `yaml:",inline"`
+	CredentialsFile   string `yaml:"credentials_file"`
+	CredentialsJSON   string `yaml:"credentials_json"`
+	Bucket            string `yaml:"bucket"`
 }
 
 // DirConfig - directory settings section
 type DirConfig struct {
-	Path              string `yaml:"path"`
-	CompressionLevel  int    `yaml:"compression_level"`
-	CompressionFormat string `yaml:"compression_format"`
+	DestinationConfig `yaml:",inline"`
 }
 
 // AzureBlobConfig - Azure Blob settings section
 type AzureBlobConfig struct {
-	EndpointSuffix        string `yaml:"endpoint_suffix"`
-	AccountName           string `yaml:"account_name"`
-	AccountKey            string `yaml:"account_key"`
-	SharedAccessSignature string `yaml:"sas" envconfig:"AZBLOB_SAS"`
-	Container             string `yaml:"container"`
-	Path                  string `yaml:"path"`
-	DownloadMaxRequests   int    `yaml:"download_max_requests"`
-	UploadMaxBuffers      int    `yaml:"upload_max_buffers"`
-	UploadPartSize        int    `yaml:"upload_part_size"`
-	MaxTries              int32  `yaml:"max_tries"`
-	TryTimeout            string `yaml:"try_timeout"`
-	CompressionLevel      int    `yaml:"compression_level"`
-	CompressionFormat     string `yaml:"compression_format"`
-	SSEKey                string `yaml:"sse_key"`
+	DestinationConfig                   `yaml:",inline"`
+	EndpointSuffix        string        `yaml:"endpoint_suffix"`
+	AccountName           string        `yaml:"account_name"`
+	AccountKey            string        `yaml:"account_key"`
+	SharedAccessSignature string        `yaml:"sas" envconfig:"AZBLOB_SAS"`
+	Container             string        `yaml:"container"`
+	DownloadMaxRequests   int           `yaml:"download_max_requests"`
+	UploadMaxBuffers      int           `yaml:"upload_max_buffers"`
+	UploadPartSize        int           `yaml:"upload_part_size"`
+	MaxTries              int32         `yaml:"max_tries"`
+	TryTimeout            time.Duration `yaml:"try_timeout"`
+	SSEKey                string        `yaml:"sse_key"`
 }
 
 // S3Config - s3 settings section
 type S3Config struct {
+	DestinationConfig              `yaml:",inline"`
 	AccessKey               string `yaml:"access_key"`
 	SecretKey               string `yaml:"secret_key"`
 	Bucket                  string `yaml:"bucket"`
@@ -75,11 +76,8 @@ type S3Config struct {
 	Region                  string `yaml:"region"`
 	ACL                     string `yaml:"acl"`
 	ForcePathStyle          bool   `yaml:"force_path_style"`
-	Path                    string `yaml:"path"`
 	DisableSSL              bool   `yaml:"disable_ssl"`
 	PartSize                int64  `yaml:"part_size"`
-	CompressionLevel        int    `yaml:"compression_level"`
-	CompressionFormat       string `yaml:"compression_format"`
 	SSE                     string `yaml:"sse"`
 	DisableCertVerification bool   `yaml:"disable_cert_verification"`
 	Debug                   bool   `yaml:"debug"`
@@ -87,40 +85,36 @@ type S3Config struct {
 
 // COSConfig - cos settings section
 type COSConfig struct {
-	RowURL            string `yaml:"url" envconfig:"URL"`
-	Timeout           string `yaml:"timeout"`
-	SecretID          string `yaml:"secret_id"`
-	SecretKey         string `yaml:"secret_key"`
-	Path              string `yaml:"path"`
-	CompressionFormat string `yaml:"compression_format"`
-	CompressionLevel  int    `yaml:"compression_level"`
-	Debug             bool   `yaml:"debug"`
+	DestinationConfig               `yaml:",inline"`
+	RowURL            string        `yaml:"url" envconfig:"URL"`
+	Timeout           time.Duration `yaml:"timeout"`
+	SecretID          string        `yaml:"secret_id"`
+	SecretKey         string        `yaml:"secret_key"`
+	Debug             bool          `yaml:"debug"`
 }
 
 // FTPConfig - ftp settings section
 type FTPConfig struct {
-	Address           string `yaml:"address"`
-	Timeout           string `yaml:"timeout"`
-	Username          string `yaml:"username"`
-	Password          string `yaml:"password"`
-	TLS               bool   `yaml:"tls"`
-	Path              string `yaml:"path"`
-	CompressionFormat string `yaml:"compression_format"`
-	CompressionLevel  int    `yaml:"compression_level"`
-	Debug             bool   `yaml:"debug"`
+	DestinationConfig               `yaml:",inline"`
+	Address           string        `yaml:"address"`
+	Timeout           time.Duration `yaml:"timeout"`
+	Username          string        `yaml:"username"`
+	Password          string        `yaml:"password"`
+	TLS               bool          `yaml:"tls"`
+	Debug             bool          `yaml:"debug"`
 }
 
 // ClickHouseConfig - clickhouse settings section
 type ClickHouseConfig struct {
-	Username     string   `yaml:"username"`
-	Password     string   `yaml:"password"`
-	Host         string   `yaml:"host"`
-	Port         uint     `yaml:"port"`
-	DataPath     string   `yaml:"data_path"`
-	SkipTables   []string `yaml:"skip_tables"`
-	Timeout      string   `yaml:"timeout"`
-	FreezeByPart bool     `yaml:"freeze_by_part"`
-	FreezeRetry  int      `yaml:"freeze_retry"`
+	Username     string        `yaml:"username"`
+	Password     string        `yaml:"password"`
+	Host         string        `yaml:"host"`
+	Port         uint          `yaml:"port"`
+	DataPath     string        `yaml:"data_path"`
+	SkipTables   []string      `yaml:"skip_tables"`
+	Timeout      time.Duration `yaml:"timeout"`
+	FreezeByPart bool          `yaml:"freeze_by_part"`
+	FreezeRetry  int           `yaml:"freeze_retry"`
 }
 
 type APIConfig struct {
@@ -159,15 +153,6 @@ func validateConfig(config *Config) error {
 	if _, err := getArchiveWriter(config.GCS.CompressionFormat, config.GCS.CompressionLevel); err != nil {
 		return err
 	}
-	if _, err := time.ParseDuration(config.ClickHouse.Timeout); err != nil {
-		return err
-	}
-	if _, err := time.ParseDuration(config.COS.Timeout); err != nil {
-		return err
-	}
-	if _, err := time.ParseDuration(config.FTP.Timeout); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -179,6 +164,10 @@ func PrintDefaultConfig() {
 }
 
 func DefaultConfig() *Config {
+	dc := DestinationConfig{
+		CompressionLevel:  1,
+		CompressionFormat: "gzip",
+	}
 	return &Config{
 		GeneralConfig: GeneralConfig{
 			RemoteStorage:       "s3",
@@ -193,54 +182,38 @@ func DefaultConfig() *Config {
 			SkipTables: []string{
 				"system.*",
 			},
-			Timeout: "5m",
+			Timeout: 5 * time.Minute,
 		},
 		Dir: DirConfig{
-			CompressionLevel:  1,
-			CompressionFormat: "gzip",
+			DestinationConfig: dc,
 		},
 		AzureBlob: AzureBlobConfig{
+			DestinationConfig: dc,
 			EndpointSuffix:    "core.windows.net",
+			TryTimeout:        2 * time.Minute,
 			UploadMaxBuffers:  3,
 			UploadPartSize:    2 * 1024 * 1024,
-			CompressionLevel:  1,
-			CompressionFormat: "gzip",
 		},
 		S3: S3Config{
-			Region:                  "us-east-1",
-			DisableSSL:              false,
-			ACL:                     "private",
-			PartSize:                100 * 1024 * 1024,
-			CompressionLevel:        1,
-			CompressionFormat:       "gzip",
-			DisableCertVerification: false,
+			DestinationConfig: dc,
+			Region:            "us-east-1",
+			ACL:               "private",
+			PartSize:          100 * 1024 * 1024,
 		},
 		GCS: GCSConfig{
-			CompressionLevel:  1,
-			CompressionFormat: "gzip",
+			DestinationConfig: dc,
 		},
 		COS: COSConfig{
-			RowURL:            "",
-			Timeout:           "2m",
-			SecretID:          "",
-			SecretKey:         "",
-			Path:              "",
-			CompressionFormat: "gzip",
-			CompressionLevel:  1,
-			Debug:             false,
+			DestinationConfig: dc,
+			Timeout:           2 * time.Minute,
 		},
 		API: APIConfig{
 			ListenAddr: "localhost:7171",
 		},
 		FTP: FTPConfig{
-			Address:           "",
-			Timeout:           "2m",
-			Username:          "",
-			Password:          "",
+			DestinationConfig: dc,
+			Timeout:           2 * time.Minute,
 			TLS:               false,
-			CompressionFormat: "gzip",
-			CompressionLevel:  1,
-			Debug:             false,
 		},
 	}
 }

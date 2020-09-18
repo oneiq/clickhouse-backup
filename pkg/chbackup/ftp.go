@@ -16,14 +16,9 @@ type FTP struct {
 }
 
 func (f *FTP) Connect() error {
-	timeout, err := time.ParseDuration(f.Config.Timeout)
-	if err != nil {
-		return err
-	}
-
 	options := make([]ftp.DialOption, 0)
 
-	options = append(options, ftp.DialWithTimeout(timeout))
+	options = append(options, ftp.DialWithTimeout(f.Config.Timeout))
 	options = append(options, ftp.DialWithDisabledEPSV(true))
 
 	if f.Config.Debug {

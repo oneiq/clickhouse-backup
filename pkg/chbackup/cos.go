@@ -23,12 +23,8 @@ func (c *COS) Connect() error {
 		return err
 	}
 	b := &cos.BaseURL{BucketURL: u}
-	timeout, err := time.ParseDuration(c.Config.Timeout)
-	if err != nil {
-		return err
-	}
 	c.client = cos.NewClient(b, &http.Client{
-		Timeout: timeout,
+		Timeout: c.Config.Timeout,
 		Transport: &cos.AuthorizationTransport{
 			SecretID:  c.Config.SecretID,
 			SecretKey: c.Config.SecretKey,

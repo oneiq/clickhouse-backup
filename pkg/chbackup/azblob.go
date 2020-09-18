@@ -57,14 +57,10 @@ func (s *AzureBlob) Connect() error {
 	// don't pollute syslog with expected 404's and other garbage logs
 	pipeline.SetForceLogEnabled(false)
 
-	tryt, err := time.ParseDuration(s.Config.TryTimeout)
-	if err != nil {
-		return err
-	}
 	pipe_opts := azblob.PipelineOptions{
 		Retry: azblob.RetryOptions{
 			MaxTries:   s.Config.MaxTries,
-			TryTimeout: tryt,
+			TryTimeout: s.Config.TryTimeout,
 		},
 	}
 
