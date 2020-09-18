@@ -59,6 +59,16 @@ func (b *Bar) Increment() {
 	}
 }
 
+func (b *Bar) SetTotal64(total int64) {
+	if b.show && total != 0 {
+		b.pb.SetTotal64(total)
+		// safe to turn these on now
+		b.pb.AutoStat = true
+		b.pb.ShowPercent = true
+		b.pb.ShowTimeLeft = true
+	}
+}
+
 func (b *Bar) NewProxyReader(r io.Reader) io.Reader {
 	if b.show {
 		return b.pb.NewProxyReader(r)

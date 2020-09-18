@@ -266,14 +266,19 @@ func (bd *BackupDestination) CompressedStreamUpload(localPath, remotePath, diffF
 		}
 	}
 
-	var totalBytes int64
-	filepath.Walk(localPath, func(filePath string, info os.FileInfo, err error) error {
-		if info.Mode().IsRegular() {
-			totalBytes += info.Size()
-		}
-		return nil
-	})
-	bar := StartNewByteBar(!bd.disableProgressBar, totalBytes)
+	bar := StartNewByteBar(!bd.disableProgressBar, 0)
+	if !bd.disableProgressBar {
+		go func() {
+			var totalBytes int64
+			filepath.Walk(localPath, func(filePath string, info os.FileInfo, err error) error {
+				if info.Mode().IsRegular() {
+					totalBytes += info.Size()
+				}
+				return nil
+			})
+			bar.SetTotal64(totalBytes)
+		}()
+	}
 	if diffFromPath != "" {
 		fi, err := os.Stat(diffFromPath)
 		if err != nil {
