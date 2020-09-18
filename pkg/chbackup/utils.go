@@ -129,8 +129,10 @@ func getArchiveWriter(format string, level int) (archiver.Writer, error) {
 		return &archiver.TarSz{Tar: archiver.NewTar()}, nil
 	case "xz":
 		return &archiver.TarXz{Tar: archiver.NewTar()}, nil
+	case "zstd":
+		return &archiver.TarZstd{Tar: archiver.NewTar()}, nil
 	}
-	return nil, fmt.Errorf("wrong compression_format, supported: 'lz4', 'bzip2', 'gzip', 'sz', 'xz'")
+	return nil, fmt.Errorf("wrong compression_format, supported: 'lz4', 'bzip2', 'gzip', 'sz', 'xz', 'zstd'")
 }
 
 func getExtension(format string) string {
@@ -147,8 +149,21 @@ func getExtension(format string) string {
 		return "tar.sz"
 	case "xz":
 		return "tar.xz"
+	case "zstd":
+		return "tar.zst"
 	}
 	return ""
+}
+
+func isArchiveExtension(s string) bool {
+	return false ||
+		strings.HasSuffix(s, ".tar") ||
+		strings.HasSuffix(s, ".tar.lz4") ||
+		strings.HasSuffix(s, ".tar.bz2") ||
+		strings.HasSuffix(s, ".tar.gz") ||
+		strings.HasSuffix(s, ".tar.sz") ||
+		strings.HasSuffix(s, ".tar.xz") ||
+		strings.HasSuffix(s, ".tar.zst")
 }
 
 func getArchiveReader(format string) (archiver.Reader, error) {
@@ -165,8 +180,10 @@ func getArchiveReader(format string) (archiver.Reader, error) {
 		return archiver.NewTarSz(), nil
 	case "xz":
 		return archiver.NewTarXz(), nil
+	case "zstd":
+		return archiver.NewTarZstd(), nil
 	}
-	return nil, fmt.Errorf("wrong compression_format, supported: 'tar', 'lz4', 'bzip2', 'gzip', 'sz', 'xz'")
+	return nil, fmt.Errorf("wrong compression_format, supported: 'tar', 'lz4', 'bzip2', 'gzip', 'sz', 'xz', 'zstd'")
 }
 
 // FormatBytes - Convert bytes to human readable string

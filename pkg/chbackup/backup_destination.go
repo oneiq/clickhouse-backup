@@ -124,12 +124,7 @@ func (bd *BackupDestination) BackupList() ([]Backup, error) {
 			key = strings.TrimPrefix(key, "/")
 			parts := strings.Split(key, "/")
 
-			if strings.HasSuffix(parts[0], ".tar") ||
-				strings.HasSuffix(parts[0], ".tar.lz4") ||
-				strings.HasSuffix(parts[0], ".tar.bz2") ||
-				strings.HasSuffix(parts[0], ".tar.gz") ||
-				strings.HasSuffix(parts[0], ".tar.sz") ||
-				strings.HasSuffix(parts[0], ".tar.xz") {
+			if isArchiveExtension(parts[0]) {
 				files[parts[0]] = ClickhouseBackup{
 					Tar:  true,
 					Date: o.LastModified(),
