@@ -57,7 +57,18 @@ func (s *AzureBlob) Connect() error {
 	// don't pollute syslog with expected 404's and other garbage logs
 	pipeline.SetForceLogEnabled(false)
 
-	container := azblob.NewServiceURL(*u, azblob.NewPipeline(credential, azblob.PipelineOptions{})).NewContainerURL(s.Config.Container)
+	tryt, err := time.ParseDuration(s.Config.TryTimeout)
+	if err != nil {
+		return err
+	}
+	pipe_opts := azblob.PipelineOptions{
+		Retry: azblob.RetryOptions{
+			MaxTries:   s.Config.MaxTries,
+			TryTimeout: tryt,
+		},
+	}
+
+	container := azblob.NewServiceURL(*u, azblob.NewPipeline(credential, pipe_opts)).NewContainerURL(s.Config.Container)
 	test_name := make([]byte, 16)
 	if _, err := rand.Read(test_name); err != nil {
 		return errors.Wrapf(err, "azblob: failed to generate test blob name")
@@ -96,22 +107,27 @@ func (s *AzureBlob) Kind() string {
 func (s *AzureBlob) GetFileReader(key string) (io.ReadCloser, error) {
 	ctx := context.Background()
 	blob := s.Container.NewBlockBlobURL(key)
+	opts := azblob.RetryReaderOptions{
+		MaxRetryRequests: s.Config.DownloadMaxRequests,
+	}
 
 	r, err := blob.Download(ctx, 0, azblob.CountToEnd, azblob.BlobAccessConditions{}, false, s.CPK)
 	if err != nil {
 		return nil, err
 	}
 
-	return r.Body(azblob.RetryReaderOptions{}), nil
+	return r.Body(opts), nil
 }
 
 func (s *AzureBlob) PutFile(key string, r io.ReadCloser) error {
 	ctx := context.Background()
 	blob := s.Container.NewBlockBlobURL(key)
+	opts := azblob.UploadStreamToBlockBlobOptions{
+		BufferSize: s.Config.UploadPartSize,
+		MaxBuffers: s.Config.UploadMaxBuffers,
+	}
 
-	bufferSize := 2 * 1024 * 1024 // Configure the size of the rotating buffers that are used when uploading
-	maxBuffers := 3               // Configure the number of rotating buffers that are used when uploading
-	_, err := x.UploadStreamToBlockBlob(ctx, r, blob, azblob.UploadStreamToBlockBlobOptions{BufferSize: bufferSize, MaxBuffers: maxBuffers}, s.CPK)
+	_, err := x.UploadStreamToBlockBlob(ctx, r, blob, opts, s.CPK)
 	return err
 }
 

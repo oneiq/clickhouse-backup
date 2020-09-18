@@ -56,8 +56,11 @@ type AzureBlobConfig struct {
 	SharedAccessSignature string `yaml:"sas" envconfig:"AZBLOB_SAS"`
 	Container             string `yaml:"container"`
 	Path                  string `yaml:"path"`
-	MaxTries              int32  `yaml:"maxTries"`
-	TryTimeout            time.Duration `yaml:"tryTimeout"`
+	DownloadMaxRequests   int    `yaml:"download_max_requests"`
+	UploadMaxBuffers      int    `yaml:"upload_max_buffers"`
+	UploadPartSize        int    `yaml:"upload_part_size"`
+	MaxTries              int32  `yaml:"max_tries"`
+	TryTimeout            string `yaml:"try_timeout"`
 	CompressionLevel      int    `yaml:"compression_level"`
 	CompressionFormat     string `yaml:"compression_format"`
 	SSEKey                string `yaml:"sse_key"`
@@ -198,6 +201,8 @@ func DefaultConfig() *Config {
 		},
 		AzureBlob: AzureBlobConfig{
 			EndpointSuffix:    "core.windows.net",
+			UploadMaxBuffers:  3,
+			UploadPartSize:    2 * 1024 * 1024,
 			CompressionLevel:  1,
 			CompressionFormat: "gzip",
 		},
