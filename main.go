@@ -103,7 +103,7 @@ func main() {
 					if err := chbackup.PrintLocalBackups(*config, c.Args().Get(1)); err != nil {
 						return err
 					}
-					if config.General.RemoteStorage != "none" {
+					if config.RemoteStorage != "none" {
 						fmt.Println("Remote backups:")
 						if err := chbackup.PrintRemoteBackups(*config, c.Args().Get(1)); err != nil {
 							return err

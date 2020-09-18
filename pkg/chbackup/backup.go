@@ -296,7 +296,7 @@ func ListLocalBackups(config Config) ([]Backup, error) {
 
 // getRemoteBackups - get all backups stored on remote storage
 func getRemoteBackups(config Config) ([]Backup, error) {
-	if config.General.RemoteStorage == "none" {
+	if config.RemoteStorage == "none" {
 		fmt.Println("PrintRemoteBackups aborted: RemoteStorage set to \"none\"")
 		return []Backup{}, nil
 	}
@@ -543,7 +543,7 @@ func GetLocalBackup(config Config, backupName string) error {
 }
 
 func Upload(config Config, backupName string, diffFrom string) error {
-	if config.General.RemoteStorage == "none" {
+	if config.RemoteStorage == "none" {
 		fmt.Println("Upload aborted: RemoteStorage set to \"none\"")
 		return nil
 	}
@@ -586,7 +586,7 @@ func Upload(config Config, backupName string, diffFrom string) error {
 }
 
 func Download(config Config, backupName string) error {
-	if config.General.RemoteStorage == "none" {
+	if config.RemoteStorage == "none" {
 		fmt.Println("Download aborted: RemoteStorage set to \"none\"")
 		return nil
 	}
@@ -635,7 +635,7 @@ func Clean(config Config) error {
 
 //
 func RemoveOldBackupsLocal(config Config) error {
-	if config.General.BackupsToKeepLocal < 1 {
+	if config.BackupsToKeepLocal < 1 {
 		return nil
 	}
 	backupList, err := ListLocalBackups(config)
@@ -646,7 +646,7 @@ func RemoveOldBackupsLocal(config Config) error {
 	if dataPath == "" {
 		return ErrUnknownClickhouseDataPath
 	}
-	backupsToDelete := GetBackupsToDelete(backupList, config.General.BackupsToKeepLocal)
+	backupsToDelete := GetBackupsToDelete(backupList, config.BackupsToKeepLocal)
 	for _, backup := range backupsToDelete {
 		backupPath := path.Join(dataPath, "backup", backup.Name)
 		os.RemoveAll(backupPath)
@@ -672,7 +672,7 @@ func RemoveBackupLocal(config Config, backupName string) error {
 }
 
 func RemoveBackupRemote(config Config, backupName string) error {
-	if config.General.RemoteStorage == "none" {
+	if config.RemoteStorage == "none" {
 		fmt.Println("RemoveBackupRemote aborted: RemoteStorage set to \"none\"")
 		return nil
 	}

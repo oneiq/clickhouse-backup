@@ -12,125 +12,129 @@ import (
 
 // Config - config file format
 type Config struct {
-	General    GeneralConfig    `yaml:"general"`
-	ClickHouse ClickHouseConfig `yaml:"clickhouse"`
+	GeneralConfig               `yaml:"general"`
+	ClickHouse ClickHouseConfig `yaml:"clickhouse" split_words:"false"`
 	S3         S3Config         `yaml:"s3"`
 	GCS        GCSConfig        `yaml:"gcs"`
 	COS        COSConfig        `yaml:"cos"`
 	API        APIConfig        `yaml:"api"`
 	FTP        FTPConfig        `yaml:"ftp"`
-	AzureBlob  AzureBlobConfig  `yaml:"azblob"`
+	AzureBlob  AzureBlobConfig  `yaml:"azblob" envconfig:"AZBLOB"`
 	Dir        DirConfig        `yaml:"dir"`
 }
 
 // GeneralConfig - general setting section
 type GeneralConfig struct {
-	RemoteStorage       string `yaml:"remote_storage" envconfig:"REMOTE_STORAGE"`
-	DisableProgressBar  bool   `yaml:"disable_progress_bar" envconfig:"DISABLE_PROGRESS_BAR"`
-	BackupsToKeepLocal  int    `yaml:"backups_to_keep_local" envconfig:"BACKUPS_TO_KEEP_LOCAL"`
-	BackupsToKeepRemote int    `yaml:"backups_to_keep_remote" envconfig:"BACKUPS_TO_KEEP_REMOTE"`
+	RemoteStorage       string `yaml:"remote_storage"`
+	DisableProgressBar  bool   `yaml:"disable_progress_bar"`
+	BackupsToKeepLocal  int    `yaml:"backups_to_keep_local"`
+	BackupsToKeepRemote int    `yaml:"backups_to_keep_remote"`
 }
 
 // GCSConfig - GCS settings section
 type GCSConfig struct {
-	CredentialsFile   string `yaml:"credentials_file" envconfig:"GCS_CREDENTIALS_FILE"`
-	CredentialsJSON   string `yaml:"credentials_json" envconfig:"GCS_CREDENTIALS_JSON"`
-	Bucket            string `yaml:"bucket" envconfig:"GCS_BUCKET"`
-	Path              string `yaml:"path" envconfig:"GCS_PATH"`
-	CompressionLevel  int    `yaml:"compression_level" envconfig:"GCS_COMPRESSION_LEVEL"`
-	CompressionFormat string `yaml:"compression_format" envconfig:"GCS_COMPRESSION_FORMAT"`
+	CredentialsFile   string `yaml:"credentials_file"`
+	CredentialsJSON   string `yaml:"credentials_json"`
+	Bucket            string `yaml:"bucket"`
+	Path              string `yaml:"path"`
+	CompressionLevel  int    `yaml:"compression_level"`
+	CompressionFormat string `yaml:"compression_format"`
 }
 
 // DirConfig - directory settings section
 type DirConfig struct {
-	Path              string `yaml:"path" envconfig:"DIR_PATH"`
-	CompressionLevel  int    `yaml:"compression_level" envconfig:"DIR_COMPRESSION_LEVEL"`
-	CompressionFormat string `yaml:"compression_format" envconfig:"DIR_COMPRESSION_FORMAT"`
+	Path              string `yaml:"path"`
+	CompressionLevel  int    `yaml:"compression_level"`
+	CompressionFormat string `yaml:"compression_format"`
 }
 
 // AzureBlobConfig - Azure Blob settings section
 type AzureBlobConfig struct {
-	EndpointSuffix        string `yaml:"endpoint_suffix" envconfig:"AZBLOB_ENDPOINT_SUFFIX"`
-	AccountName           string `yaml:"account_name" envconfig:"AZBLOB_ACCOUNT_NAME"`
-	AccountKey            string `yaml:"account_key" envconfig:"AZBLOB_ACCOUNT_KEY"`
+	EndpointSuffix        string `yaml:"endpoint_suffix"`
+	AccountName           string `yaml:"account_name"`
+	AccountKey            string `yaml:"account_key"`
 	SharedAccessSignature string `yaml:"sas" envconfig:"AZBLOB_SAS"`
-	Container             string `yaml:"container" envconfig:"AZBLOB_CONTAINER"`
-	Path                  string `yaml:"path" envconfig:"AZBLOB_PATH"`
-	CompressionLevel      int    `yaml:"compression_level" envconfig:"AZBLOB_COMPRESSION_LEVEL"`
-	CompressionFormat     string `yaml:"compression_format" envconfig:"AZBLOB_COMPRESSION_FORMAT"`
-	SSEKey                string `yaml:"sse_key" envconfig:"AZBLOB_SSE_KEY"`
+	Container             string `yaml:"container"`
+	Path                  string `yaml:"path"`
+	MaxTries              int32  `yaml:"maxTries"`
+	TryTimeout            time.Duration `yaml:"tryTimeout"`
+	CompressionLevel      int    `yaml:"compression_level"`
+	CompressionFormat     string `yaml:"compression_format"`
+	SSEKey                string `yaml:"sse_key"`
 }
 
 // S3Config - s3 settings section
 type S3Config struct {
-	AccessKey               string `yaml:"access_key" envconfig:"S3_ACCESS_KEY"`
-	SecretKey               string `yaml:"secret_key" envconfig:"S3_SECRET_KEY"`
-	Bucket                  string `yaml:"bucket" envconfig:"S3_BUCKET"`
-	Endpoint                string `yaml:"endpoint" envconfig:"S3_ENDPOINT"`
-	Region                  string `yaml:"region" envconfig:"S3_REGION"`
-	ACL                     string `yaml:"acl" envconfig:"S3_ACL"`
-	ForcePathStyle          bool   `yaml:"force_path_style" envconfig:"S3_FORCE_PATH_STYLE"`
-	Path                    string `yaml:"path" envconfig:"S3_PATH"`
-	DisableSSL              bool   `yaml:"disable_ssl" envconfig:"S3_DISABLE_SSL"`
-	PartSize                int64  `yaml:"part_size" envconfig:"S3_PART_SIZE"`
-	CompressionLevel        int    `yaml:"compression_level" envconfig:"S3_COMPRESSION_LEVEL"`
-	CompressionFormat       string `yaml:"compression_format" envconfig:"S3_COMPRESSION_FORMAT"`
-	SSE                     string `yaml:"sse" envconfig:"S3_SSE"`
-	DisableCertVerification bool   `yaml:"disable_cert_verification" envconfig:"S3_DISABLE_CERT_VERIFICATION"`
-	Debug                   bool   `yaml:"debug" envconfig:"S3_DEBUG"`
+	AccessKey               string `yaml:"access_key"`
+	SecretKey               string `yaml:"secret_key"`
+	Bucket                  string `yaml:"bucket"`
+	Endpoint                string `yaml:"endpoint"`
+	Region                  string `yaml:"region"`
+	ACL                     string `yaml:"acl"`
+	ForcePathStyle          bool   `yaml:"force_path_style"`
+	Path                    string `yaml:"path"`
+	DisableSSL              bool   `yaml:"disable_ssl"`
+	PartSize                int64  `yaml:"part_size"`
+	CompressionLevel        int    `yaml:"compression_level"`
+	CompressionFormat       string `yaml:"compression_format"`
+	SSE                     string `yaml:"sse"`
+	DisableCertVerification bool   `yaml:"disable_cert_verification"`
+	Debug                   bool   `yaml:"debug"`
 }
 
 // COSConfig - cos settings section
 type COSConfig struct {
-	RowURL            string `yaml:"url" envconfig:"COS_URL"`
-	Timeout           string `yaml:"timeout" envconfig:"COS_TIMEOUT"`
-	SecretID          string `yaml:"secret_id" envconfig:"COS_SECRET_ID"`
-	SecretKey         string `yaml:"secret_key" envconfig:"COS_SECRET_KEY"`
-	Path              string `yaml:"path" envconfig:"COS_PATH"`
-	CompressionFormat string `yaml:"compression_format" envconfig:"COS_COMPRESSION_FORMAT"`
-	CompressionLevel  int    `yaml:"compression_level" envconfig:"COS_COMPRESSION_LEVEL"`
-	Debug             bool   `yaml:"debug" envconfig:"COS_DEBUG"`
+	RowURL            string `yaml:"url" envconfig:"URL"`
+	Timeout           string `yaml:"timeout"`
+	SecretID          string `yaml:"secret_id"`
+	SecretKey         string `yaml:"secret_key"`
+	Path              string `yaml:"path"`
+	CompressionFormat string `yaml:"compression_format"`
+	CompressionLevel  int    `yaml:"compression_level"`
+	Debug             bool   `yaml:"debug"`
 }
 
 // FTPConfig - ftp settings section
 type FTPConfig struct {
-	Address           string `yaml:"address" envconfig:"FTP_ADDRESS"`
-	Timeout           string `yaml:"timeout" envconfig:"FTP_TIMEOUT"`
-	Username          string `yaml:"username" envconfig:"FTP_USERNAME"`
-	Password          string `yaml:"password" envconfig:"FTP_PASSWORD"`
-	TLS               bool   `yaml:"tls" envconfig:"FTP_TLS"`
-	Path              string `yaml:"path" envconfig:"FTP_PATH"`
-	CompressionFormat string `yaml:"compression_format" envconfig:"FTP_COMPRESSION_FORMAT"`
-	CompressionLevel  int    `yaml:"compression_level" envconfig:"FTP_COMPRESSION_LEVEL"`
-	Debug             bool   `yaml:"debug" envconfig:"FTP_DEBUG"`
+	Address           string `yaml:"address"`
+	Timeout           string `yaml:"timeout"`
+	Username          string `yaml:"username"`
+	Password          string `yaml:"password"`
+	TLS               bool   `yaml:"tls"`
+	Path              string `yaml:"path"`
+	CompressionFormat string `yaml:"compression_format"`
+	CompressionLevel  int    `yaml:"compression_level"`
+	Debug             bool   `yaml:"debug"`
 }
 
 // ClickHouseConfig - clickhouse settings section
 type ClickHouseConfig struct {
-	Username     string   `yaml:"username" envconfig:"CLICKHOUSE_USERNAME"`
-	Password     string   `yaml:"password" envconfig:"CLICKHOUSE_PASSWORD"`
-	Host         string   `yaml:"host" envconfig:"CLICKHOUSE_HOST"`
-	Port         uint     `yaml:"port" envconfig:"CLICKHOUSE_PORT"`
-	DataPath     string   `yaml:"data_path" envconfig:"CLICKHOUSE_DATA_PATH"`
-	SkipTables   []string `yaml:"skip_tables" envconfig:"CLICKHOUSE_SKIP_TABLES"`
-	Timeout      string   `yaml:"timeout" envconfig:"CLICKHOUSE_TIMEOUT"`
-	FreezeByPart bool     `yaml:"freeze_by_part" envconfig:"CLICKHOUSE_FREEZE_BY_PART"`
+	Username     string   `yaml:"username"`
+	Password     string   `yaml:"password"`
+	Host         string   `yaml:"host"`
+	Port         uint     `yaml:"port"`
+	DataPath     string   `yaml:"data_path"`
+	SkipTables   []string `yaml:"skip_tables"`
+	Timeout      string   `yaml:"timeout"`
+	FreezeByPart bool     `yaml:"freeze_by_part"`
+	FreezeRetry  int      `yaml:"freeze_retry"`
 }
 
 type APIConfig struct {
 	ListenAddr    string `yaml:"listen" envconfig:"API_LISTEN"`
-	EnableMetrics bool   `yaml:"enable_metrics" envconfig:"API_ENABLE_METRICS"`
-	EnablePprof   bool   `yaml:"enable_pprof" envconfig:"API_ENABLE_PPROF"`
-	Username      string `yaml:"username" envconfig:"API_USERNAME"`
-	Password      string `yaml:"password" envconfig:"API_PASSWORD"`
+	EnableMetrics bool   `yaml:"enable_metrics"`
+	EnablePprof   bool   `yaml:"enable_pprof"`
+	Username      string `yaml:"username"`
+	Password      string `yaml:"password"`
 }
 
 // LoadConfig - load config from file
 func LoadConfig(configLocation string) (*Config, error) {
 	config := DefaultConfig()
+	configEnv := envconfig.EnvConfig{Spec: config, DefaultSplitWords: true}
 	configYaml, err := ioutil.ReadFile(configLocation)
 	if os.IsNotExist(err) {
-		err := envconfig.Process("", config)
+		err := configEnv.Process()
 		return config, err
 	}
 	if err != nil {
@@ -139,7 +143,7 @@ func LoadConfig(configLocation string) (*Config, error) {
 	if err := yaml.Unmarshal(configYaml, &config); err != nil {
 		return nil, fmt.Errorf("can't parse config file: %v", err)
 	}
-	if err := envconfig.Process("", config); err != nil {
+	if err := configEnv.Process(); err != nil {
 		return nil, err
 	}
 	return config, validateConfig(config)
@@ -173,7 +177,7 @@ func PrintDefaultConfig() {
 
 func DefaultConfig() *Config {
 	return &Config{
-		General: GeneralConfig{
+		GeneralConfig: GeneralConfig{
 			RemoteStorage:       "s3",
 			BackupsToKeepLocal:  0,
 			BackupsToKeepRemote: 0,

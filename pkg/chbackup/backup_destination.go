@@ -390,7 +390,7 @@ func (bd *BackupDestination) CompressedStreamUpload(localPath, remotePath, diffF
 }
 
 func NewBackupDestination(config Config) (*BackupDestination, error) {
-	switch config.General.RemoteStorage {
+	switch config.RemoteStorage {
     case "dir":
         dir := &Dir{Config: &config.Dir}
 		return &BackupDestination{
@@ -398,8 +398,8 @@ func NewBackupDestination(config Config) (*BackupDestination, error) {
 			config.Dir.Path,
 			config.Dir.CompressionFormat,
 			config.Dir.CompressionLevel,
-			config.General.DisableProgressBar,
-			config.General.BackupsToKeepRemote,
+			config.DisableProgressBar,
+			config.BackupsToKeepRemote,
 		}, nil
 	case "azblob":
 		azblob := &AzureBlob{Config: &config.AzureBlob}
@@ -408,8 +408,8 @@ func NewBackupDestination(config Config) (*BackupDestination, error) {
 			config.AzureBlob.Path,
 			config.AzureBlob.CompressionFormat,
 			config.AzureBlob.CompressionLevel,
-			config.General.DisableProgressBar,
-			config.General.BackupsToKeepRemote,
+			config.DisableProgressBar,
+			config.BackupsToKeepRemote,
 		}, nil
 	case "s3":
 		s3 := &S3{Config: &config.S3}
@@ -418,8 +418,8 @@ func NewBackupDestination(config Config) (*BackupDestination, error) {
 			config.S3.Path,
 			config.S3.CompressionFormat,
 			config.S3.CompressionLevel,
-			config.General.DisableProgressBar,
-			config.General.BackupsToKeepRemote,
+			config.DisableProgressBar,
+			config.BackupsToKeepRemote,
 		}, nil
 	case "gcs":
 		gcs := &GCS{Config: &config.GCS}
@@ -428,8 +428,8 @@ func NewBackupDestination(config Config) (*BackupDestination, error) {
 			config.GCS.Path,
 			config.GCS.CompressionFormat,
 			config.GCS.CompressionLevel,
-			config.General.DisableProgressBar,
-			config.General.BackupsToKeepRemote,
+			config.DisableProgressBar,
+			config.BackupsToKeepRemote,
 		}, nil
 	case "cos":
 		cos := &COS{Config: &config.COS}
@@ -438,8 +438,8 @@ func NewBackupDestination(config Config) (*BackupDestination, error) {
 			config.COS.Path,
 			config.COS.CompressionFormat,
 			config.COS.CompressionLevel,
-			config.General.DisableProgressBar,
-			config.General.BackupsToKeepRemote,
+			config.DisableProgressBar,
+			config.BackupsToKeepRemote,
 		}, nil
 	case "ftp":
 		ftp := &FTP{Config: &config.FTP}
@@ -448,10 +448,10 @@ func NewBackupDestination(config Config) (*BackupDestination, error) {
 			config.FTP.Path,
 			config.FTP.CompressionFormat,
 			config.FTP.CompressionLevel,
-			config.General.DisableProgressBar,
-			config.General.BackupsToKeepRemote,
+			config.DisableProgressBar,
+			config.BackupsToKeepRemote,
 		}, nil
 	default:
-		return nil, fmt.Errorf("storage type '%s' not supported", config.General.RemoteStorage)
+		return nil, fmt.Errorf("storage type '%s' not supported", config.RemoteStorage)
 	}
 }

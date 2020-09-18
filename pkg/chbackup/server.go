@@ -389,7 +389,7 @@ func (api *APIServer) httpListHandler(w http.ResponseWriter, r *http.Request) {
 			Location: "local",
 		})
 	}
-	if api.config.General.RemoteStorage != "none" {
+	if api.config.RemoteStorage != "none" {
 		remoteBackups, err := getRemoteBackups(api.config)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "list", err)

@@ -34,4 +34,6 @@ require (
 	gopkg.in/yaml.v2 v2.3.0
 )
 
+replace github.com/kelseyhightower/envconfig => ./pkg/envconfig
+
 go 1.14
