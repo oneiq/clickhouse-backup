@@ -2,6 +2,7 @@ package chbackup
 
 import (
 	"archive/tar"
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +24,8 @@ import (
 const (
 	// MetaFileName - meta file name
 	MetaFileName = "meta.json"
+	MetaRequiredBackupField = "required_backup"
+	MetaHardlinksField      = "hardlinks"
 	// BufferSize - size of ring buffer between stream handlers
 	BufferSize = 4 * 1024 * 1024
 )
@@ -288,12 +291,29 @@ func (bd *BackupDestination) CompressedStreamUpload(localPath, remotePath, diffF
 			return fmt.Errorf("'%s' is old format backup and doesn't supports diff", filepath.Base(diffFromPath))
 		}
 	}
-	hardlinks := []string{}
 
-	buf := buffer.New(BufferSize)
-	body, w := nio.Pipe(buf)
+	body, w := nio.Pipe(buffer.New(BufferSize))
 	go func() (ferr error) {
 		defer w.CloseWithError(ferr)
+
+		mf, err := ioutil.TempFile("", MetaFileName)
+		if err != nil {
+			return fmt.Errorf("can't create meta.info: %v", err)
+		}
+		defer os.Remove(mf.Name())
+		defer mf.Close()
+		metawr := bufio.NewWriterSize(mf, BufferSize)
+		if diffFromPath != "" {
+			metawr.WriteString("{\"")
+			metawr.WriteString(MetaRequiredBackupField)
+			metawr.WriteString("\":\"")
+			writeJsonString(metawr, filepath.Base(diffFromPath))
+			metawr.WriteString("\",\"")
+			metawr.WriteString(MetaHardlinksField)
+			metawr.WriteString("\":[")
+		}
+		metasep := "\n\""
+
 		iobuf := buffer.New(BufferSize)
 		z, _ := getArchiveWriter(bd.compressionFormat, bd.compressionLevel)
 		if ferr = z.Create(w); ferr != nil {
@@ -318,7 +338,10 @@ func (bd *BackupDestination) CompressedStreamUpload(localPath, remotePath, diffF
 				diffFromFile, err := os.Stat(filepath.Join(diffFromPath, relativePath))
 				if err == nil {
 					if os.SameFile(info, diffFromFile) {
-						hardlinks = append(hardlinks, relativePath)
+						metawr.WriteString(metasep)
+						writeJsonString(metawr, relativePath)
+						metawr.WriteByte('"')
+						metasep = ",\n\""
 						return nil
 					}
 				}
@@ -335,39 +358,16 @@ func (bd *BackupDestination) CompressedStreamUpload(localPath, remotePath, diffF
 		}); ferr != nil {
 			return
 		}
-		if len(hardlinks) > 0 {
-			metafile := MetaFile{
-				RequiredBackup: filepath.Base(diffFromPath),
-				Hardlinks:      hardlinks,
-			}
-			content, err := json.MarshalIndent(&metafile, "", "\t")
-			if err != nil {
-				ferr = fmt.Errorf("can't marshal json: %v", err)
-				return
-			}
-			tmpfile, err := ioutil.TempFile("", MetaFileName)
-			if err != nil {
-				ferr = fmt.Errorf("can't create meta.info: %v", err)
-				return
-			}
-			if _, err := tmpfile.Write(content); err != nil {
-				ferr = fmt.Errorf("can't write to meta.info: %v", err)
-				return
-			}
-			tmpfile.Close()
-			tmpFileName := tmpfile.Name()
-			defer os.Remove(tmpFileName)
-			info, err := os.Stat(tmpFileName)
+
+		if diffFromPath != "" {
+			metawr.WriteString("]}")
+			metawr.Flush()
+			mf.Seek(0, 0)
+			info, err := mf.Stat()
 			if err != nil {
 				ferr = fmt.Errorf("can't get stat: %v", err)
 				return
 			}
-			mf, err := os.Open(tmpFileName)
-			if err != nil {
-				ferr = err
-				return
-			}
-			defer mf.Close()
 			if err := z.Write(archiver.File{
 				FileInfo: archiver.FileInfo{
 					FileInfo:   info,

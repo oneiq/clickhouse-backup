@@ -1,6 +1,7 @@
 package chbackup
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -236,4 +237,36 @@ func sendResponse(w http.ResponseWriter, statusCode int, v interface{}) {
 	w.WriteHeader(statusCode)
 	out, _ := json.Marshal(&v)
 	fmt.Fprintln(w, string(out))
+}
+
+func writeJsonString(w *bufio.Writer, s string) {
+	const hex string = "0123456789abcdef"
+	l := len(s)
+	for i := 0; i < l; i++ {
+		c := s[i]
+		if c >= 0x20 && c != '\\' && c != '"' {
+			// NB: this works because valid UTF-8 encodings of more than 1 byte have MSB set
+			w.WriteByte(c)
+			continue
+		}
+		w.WriteByte('\\')
+		switch c {
+		case '\\', '"':
+			w.WriteByte(c)
+		case '\n':
+			w.WriteByte('n')
+		case '\f':
+			w.WriteByte('f')
+		case '\b':
+			w.WriteByte('b')
+		case '\r':
+			w.WriteByte('r')
+		case '\t':
+			w.WriteByte('t')
+		default:
+			w.WriteString("u00")
+			w.WriteByte(hex[c>>4])
+			w.WriteByte(hex[c&0xF])
+		}
+	}
 }
