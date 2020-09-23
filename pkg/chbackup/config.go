@@ -29,6 +29,7 @@ type GeneralConfig struct {
 	DisableProgressBar  bool   `yaml:"disable_progress_bar"`
 	BackupsToKeepLocal  int    `yaml:"backups_to_keep_local"`
 	BackupsToKeepRemote int    `yaml:"backups_to_keep_remote"`
+	BackupNameFormat    string `yaml:"backup_name_format"`
 }
 
 type DestinationConfig struct {
@@ -173,6 +174,7 @@ func DefaultConfig() *Config {
 			RemoteStorage:       "s3",
 			BackupsToKeepLocal:  0,
 			BackupsToKeepRemote: 0,
+			BackupNameFormat:    "2006-01-02T15-04-05",
 		},
 		ClickHouse: ClickHouseConfig{
 			Username: "default",

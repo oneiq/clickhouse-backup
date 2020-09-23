@@ -14,11 +14,6 @@ import (
 	"time"
 )
 
-const (
-	// BackupTimeFormat - default backup name format
-	BackupTimeFormat = "2006-01-02T15-04-05"
-)
-
 var (
 	// ErrUnknownClickhouseDataPath -
 	ErrUnknownClickhouseDataPath = errors.New("clickhouse data path is unknown, you can set data_path in config file")
@@ -371,15 +366,17 @@ func Freeze(config Config, tablePattern string) error {
 }
 
 // NewBackupName - return default backup name
-func NewBackupName() string {
-	return time.Now().UTC().Format(BackupTimeFormat)
+func NewBackupName(config Config) string {
+	return time.Now().UTC().Format(config.BackupNameFormat)
 }
 
 // CreateBackup - create new backup of all tables matched by tablePattern
 // If backupName is empty string will use default backup name
 func CreateBackup(config Config, backupName, tablePattern string) error {
 	if backupName == "" {
-		backupName = NewBackupName()
+		if backupName = NewBackupName(config); backupName == "" {
+			return fmt.Errorf("backup name is not specified and BackupNameFormat is not set")
+		}
 	}
 	dataPath := getDataPath(config)
 	if dataPath == "" {

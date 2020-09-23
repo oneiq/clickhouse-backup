@@ -428,7 +428,7 @@ func (api *APIServer) httpCreateHandler(w http.ResponseWriter, r *http.Request) 
 	defer api.metrics.LastBackupEnd.Set(float64(time.Now().Unix()))
 
 	tablePattern := ""
-	backupName := NewBackupName()
+	backupName := NewBackupName(api.config)
 
 	query := r.URL.Query()
 	if tp, exist := query["table"]; exist {
