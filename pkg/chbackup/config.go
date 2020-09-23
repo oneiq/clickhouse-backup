@@ -32,6 +32,7 @@ type GeneralConfig struct {
 	BackupNameFormat    string `yaml:"backup_name_format"`
 	AutoCleanMaxRetry   int    `yaml:"auto_clean_max_retry"`
 	AutoCleanDelay      time.Duration `yaml:"auto_clean_delay"`
+	FullBackupInterval  time.Duration `yaml:"full_backup_interval"`
 }
 
 type DestinationConfig struct {

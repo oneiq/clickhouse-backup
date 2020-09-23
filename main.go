@@ -78,12 +78,24 @@ func main() {
 			Usage:     "Upload backup to remote storage",
 			UsageText: "clickhouse-backup upload [--diff-from=<backup_name>] <backup_name>",
 			Action: func(c *cli.Context) error {
+				if c.Bool("sync") {
+					return chbackup.UploadSync(*getConfig(c), c.Bool("dry-run"))
+				}
+
 				return chbackup.Upload(*getConfig(c), c.Args().First(), c.String("diff-from"))
 			},
 			Flags: append(cliapp.Flags,
 				cli.StringFlag{
 					Name:   "diff-from",
 					Hidden: false,
+				},
+				cli.BoolFlag{
+					Name:   "sync",
+					Usage:  "Sync local backups with remote storage",
+				},
+				cli.BoolFlag{
+					Name:   "dry-run",
+					Usage:  "Show what would be done, don't modify anything",
 				},
 			),
 		},

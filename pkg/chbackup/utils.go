@@ -166,6 +166,23 @@ func isArchiveExtension(s string) bool {
 		strings.HasSuffix(s, ".tar.zst")
 }
 
+func stripArchiveExtension(s string) string {
+	switch {
+	case strings.HasSuffix(s, ".tar"):
+		return s[:len(s) - 4]
+	case strings.HasSuffix(s, ".tar.lz4") ||
+	     strings.HasSuffix(s, ".tar.bz2") ||
+	     strings.HasSuffix(s, ".tar.zst"):
+		return s[:len(s) - 8]
+	case strings.HasSuffix(s, ".tar.gz") ||
+	     strings.HasSuffix(s, ".tar.sz") ||
+	     strings.HasSuffix(s, ".tar.xz"):
+		return s[:len(s) - 7]
+	default:
+		return ""
+	}
+}
+
 func getArchiveReader(format string) (archiver.Reader, error) {
 	switch format {
 	case "tar":
