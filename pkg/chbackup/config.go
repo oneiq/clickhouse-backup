@@ -30,6 +30,8 @@ type GeneralConfig struct {
 	BackupsToKeepLocal  int    `yaml:"backups_to_keep_local"`
 	BackupsToKeepRemote int    `yaml:"backups_to_keep_remote"`
 	BackupNameFormat    string `yaml:"backup_name_format"`
+	AutoCleanMaxRetry   int    `yaml:"auto_clean_max_retry"`
+	AutoCleanDelay      time.Duration `yaml:"auto_clean_delay"`
 }
 
 type DestinationConfig struct {

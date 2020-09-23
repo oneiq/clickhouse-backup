@@ -382,9 +382,43 @@ func CreateBackup(config Config, backupName, tablePattern string) error {
 	if dataPath == "" {
 		return ErrUnknownClickhouseDataPath
 	}
-	backupPath := path.Join(dataPath, "backup", backupName)
-	if _, err := os.Stat(backupPath); err == nil || !os.IsNotExist(err) {
-		return fmt.Errorf("can't create backup '%s' already exists", backupPath)
+	backupPath := path.Join(dataPath, "backup.tmp")
+	backupDest := path.Join(dataPath, "backup", backupName)
+	if err := os.MkdirAll(path.Dir(backupDest), os.ModePerm); err != nil {
+		return fmt.Errorf("can't create backup: %v", err)
+	}
+	if _, err := os.Stat(backupDest); err == nil || !os.IsNotExist(err) {
+		return fmt.Errorf("backup '%s' already exists", backupName)
+	}
+	if config.AutoCleanMaxRetry != 0 {
+		shadowDir := path.Join(dataPath, "shadow")
+		for i := config.AutoCleanMaxRetry; ; i-- {
+			ok := true
+
+			if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+				// nothing to clean
+			} else if err = os.RemoveAll(backupPath); err == nil {
+				log.Println("Cleaned up incomplete backup.")
+			} else if !os.IsNotExist(err) {
+				ok = false
+			}
+
+			if _, err := os.Stat(shadowDir); os.IsNotExist(err) {
+				// nothing to clean
+			} else if err = os.RemoveAll(shadowDir); err == nil {
+				log.Println("Cleaned up shadow directory. Waiting for straggling freeze operations to finish before rechecking...")
+				time.Sleep(config.AutoCleanDelay)
+				ok = false
+			} else if !os.IsNotExist(err) {
+				ok = false
+			}
+
+			if ok {
+				break
+			} else if i == 0 {
+				return fmt.Errorf("can't create backup: auto-clean failed")
+			}
+		}
 	}
 	if err := os.MkdirAll(backupPath, os.ModePerm); err != nil {
 		return fmt.Errorf("can't create backup: %v", err)
@@ -425,6 +459,9 @@ func CreateBackup(config Config, backupName, tablePattern string) error {
 	shadowDir := path.Join(dataPath, "shadow")
 	if err := moveShadow(shadowDir, backupShadowDir); err != nil {
 		return err
+	}
+	if err := os.Rename(backupPath, backupDest); err != nil {
+		return fmt.Errorf("cannot commit backup: %v", err)
 	}
 	if err := RemoveOldBackupsLocal(config); err != nil {
 		return err

@@ -61,7 +61,7 @@ func main() {
 		{
 			Name:        "create",
 			Usage:       "Create new backup",
-			UsageText:   "clickhouse-backup create [-t, --tables=<db>.<table>] <backup_name>",
+			UsageText:   "clickhouse-backup create [-t, --tables=<db>.<table>] [<backup_name>]",
 			Description: "Create new backup",
 			Action: func(c *cli.Context) error {
 				return chbackup.CreateBackup(*getConfig(c), c.Args().First(), c.String("t"))
