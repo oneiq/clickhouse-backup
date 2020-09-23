@@ -1,6 +1,7 @@
 package chbackup
 
 import (
+	"database/sql/driver"
 	"fmt"
 	"log"
 	"net/url"
@@ -188,10 +189,26 @@ func (ch *ClickHouse) FreezeTable(table Table) error {
 	}
 	log.Printf("Freeze '%s.%s'", table.Database, table.Name)
 	query := fmt.Sprintf("ALTER TABLE `%v`.`%v` FREEZE;", table.Database, table.Name)
-	if _, err := ch.conn.Exec(query); err != nil {
-		return fmt.Errorf("can't freeze '%s.%s': %v", table.Database, table.Name, err)
+	for i := 0; i <= ch.Config.FreezeRetry; i++ {
+		switch _, err = ch.conn.Exec(query); err {
+		case driver.ErrBadConn:
+			log.Printf("reconnecting to database\n")
+			ch.Close()
+			if err = ch.Connect(); err == nil {
+				continue
+			}
+		case nil:
+			if i != 0 {
+				log.Printf("succeeded on attempt #%d\n", i + 1)
+			}
+			return nil
+		default:
+			continue
+		}
+		// CH reconnect failed
+		break
 	}
-	return nil
+	return fmt.Errorf("can't freeze '%s.%s': %v", table.Database, table.Name, err)
 }
 
 // GetBackupTables - return list of backups of tables that can be restored
