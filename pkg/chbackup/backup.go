@@ -618,20 +618,31 @@ func UploadSync(config Config, dryRun bool) error {
 	}
 
 	// NOTE: Sync requires backup names to be date-based
-	// I don't need dates reported by storage locations
+	// I don't need dates or sizes reported by storage locations
 	for i, _ := range backupListLocal {
 		name := backupListLocal[i].Name
 		backupListLocal[i].Date, _ = time.Parse(config.BackupNameFormat, name)
 	}
 	for i, _ := range backupListRemote {
 		name := stripArchiveExtension(backupListRemote[i].Name)
+		full := int64(0)
 		if strings.HasSuffix(name, "-full") {
 			name = name[:len(name) - 5]
+			full = 1
 		}
 		backupListRemote[i].Date, _ = time.Parse(config.BackupNameFormat, name)
+		backupListRemote[i].Size    = full
 	}
-	sort.SliceStable(backupListLocal,  func(i, j int) bool { return backupListLocal[i].Date.Before(backupListLocal[j].Date) })
-	sort.SliceStable(backupListRemote, func(i, j int) bool { return backupListRemote[i].Date.Before(backupListRemote[j].Date) })
+	sort.SliceStable(backupListLocal,  func(i, j int) bool {
+		return backupListLocal[i].Date.Before(backupListLocal[j].Date)
+	})
+	sort.SliceStable(backupListRemote, func(i, j int) bool {
+		// sort full backups before matching difference backups
+		// to be able to skip the latter below and avoid creating extra full backups
+		return backupListRemote[i].Date.Before(backupListRemote[j].Date) ||
+			backupListRemote[i].Date == backupListRemote[j].Date &&
+			backupListRemote[i].Size >= backupListRemote[j].Size
+	})
 
 	var lastFullBackupDate time.Time
 	var previousBackup     backupPair
@@ -677,48 +688,63 @@ func UploadSync(config Config, dryRun bool) error {
 		case dl.Before(dr) || dr.IsZero():
 			pair.Local  = il
 			pair.LDate  = dl
+			dr = time.Time{}
+			br = Backup{}
 			il++
 		default:
 			pair.Remote = ir
 			pair.RDate  = dr
+			dl = time.Time{}
+			bl = Backup{}
 			ir++
 		}
 
 		log.Printf("%+v\n", pair)
 
-		if !dr.IsZero() && strings.Contains(br.Name, "-full.") {
+		if !dr.IsZero() && br.Size != 0 {
 			lastFullBackupDate = dr
 		}
 
-		if !dl.IsZero() && dr.IsZero() {
-			localName  := bl.Name
-			remoteName := bl.Name
-			diffFrom   := ""
-			if lastFullBackupDate.IsZero() || dl.Sub(lastFullBackupDate) > config.FullBackupInterval {
-				log.Printf("Uploading %s-full\n", localName)
-				remoteName += "-full"
-			} else if previousBackup.LDate.IsZero() {
-				log.Printf("Uploading %s-full because preceding local backup %s is missing\n", localName, backupListRemote[previousBackup.Remote].Name)
-				remoteName += "-full"
-			} else {
+		if !dl.IsZero() {
+			localName := bl.Name
+			diffFrom  := ""
+			alsoFull  := false
+
+			// always upload the difference backup for continuity purposes
+			if dr.IsZero() && !previousBackup.LDate.IsZero() {
 				diffFrom = backupListLocal[previousBackup.Local].Name
 				log.Printf("Uploading %s difference from %s\n", localName, diffFrom)
-				diffFrom = path.Join(dataPath, "backup", diffFrom)
+
+				if !dryRun {
+					if err = bd.CompressedStreamUpload(path.Join(dataPath, "backup", localName), localName, path.Join(dataPath, "backup", diffFrom)); err != nil {
+						return fmt.Errorf("can't upload: %v", err)
+					}
+				}
 			}
 
-			if !dryRun {
-				if err = bd.CompressedStreamUpload(path.Join(dataPath, "backup", localName), remoteName, diffFrom); err != nil {
-					return fmt.Errorf("can't upload: %v", err)
+			if dr.IsZero() || br.Size == 0 {
+				if lastFullBackupDate.IsZero() || dl.Sub(lastFullBackupDate) >= config.FullBackupInterval {
+					alsoFull = true
+					log.Printf("Uploading %s-full\n", localName)
+				} else if dr.IsZero() && diffFrom == "" {
+					alsoFull = true
+					log.Printf("Uploading %s-full because preceding local backup matching %s is missing\n", localName, backupListRemote[previousBackup.Remote].Name)
 				}
+			}
+
+			if alsoFull {
+				if !dryRun {
+					if err = bd.CompressedStreamUpload(path.Join(dataPath, "backup", localName), localName + "-full", ""); err != nil {
+						return fmt.Errorf("can't upload: %v", err)
+					}
+				}
+
+				lastFullBackupDate = dl
 			}
 
 			// remember that we've uploaded this backup
 			// .Remote will not be not used b/c local backup exists
 			pair.RDate = dl
-
-			if diffFrom == "" {
-				lastFullBackupDate = dl
-			}
 		}
 
 		if !pair.RDate.IsZero() && !dl.IsZero() {
