@@ -620,10 +620,15 @@ func UploadSync(config Config, dryRun bool) error {
 	// NOTE: Sync requires backup names to be date-based
 	// I don't need dates reported by storage locations
 	for i, _ := range backupListLocal {
-		backupListLocal[i].Date, _ = time.Parse(config.BackupNameFormat, backupListLocal[i].Name)
+		name := backupListLocal[i].Name
+		backupListLocal[i].Date, _ = time.Parse(config.BackupNameFormat, name)
 	}
 	for i, _ := range backupListRemote {
-		backupListRemote[i].Date, _ = time.Parse(config.BackupNameFormat, stripArchiveExtension(backupListRemote[i].Name))
+		name := stripArchiveExtension(backupListRemote[i].Name)
+		if strings.HasSuffix(name, "-full") {
+			name = name[:len(name) - 5]
+		}
+		backupListRemote[i].Date, _ = time.Parse(config.BackupNameFormat, name)
 	}
 	sort.SliceStable(backupListLocal,  func(i, j int) bool { return backupListLocal[i].Date.Before(backupListLocal[j].Date) })
 	sort.SliceStable(backupListRemote, func(i, j int) bool { return backupListRemote[i].Date.Before(backupListRemote[j].Date) })
@@ -686,12 +691,15 @@ func UploadSync(config Config, dryRun bool) error {
 		}
 
 		if !dl.IsZero() && dr.IsZero() {
-			localName := bl.Name
-			diffFrom  := ""
+			localName  := bl.Name
+			remoteName := bl.Name
+			diffFrom   := ""
 			if lastFullBackupDate.IsZero() || dl.Sub(lastFullBackupDate) > config.FullBackupInterval {
 				log.Printf("Uploading %s-full\n", localName)
+				remoteName += "-full"
 			} else if previousBackup.LDate.IsZero() {
 				log.Printf("Uploading %s-full because preceding local backup %s is missing\n", localName, backupListRemote[previousBackup.Remote].Name)
+				remoteName += "-full"
 			} else {
 				diffFrom = backupListLocal[previousBackup.Local].Name
 				log.Printf("Uploading %s difference from %s\n", localName, diffFrom)
@@ -699,7 +707,7 @@ func UploadSync(config Config, dryRun bool) error {
 			}
 
 			if !dryRun {
-				if err = bd.CompressedStreamUpload(path.Join(dataPath, "backup", localName), localName, diffFrom); err != nil {
+				if err = bd.CompressedStreamUpload(path.Join(dataPath, "backup", localName), remoteName, diffFrom); err != nil {
 					return fmt.Errorf("can't upload: %v", err)
 				}
 			}
@@ -714,7 +722,9 @@ func UploadSync(config Config, dryRun bool) error {
 		}
 
 		if !pair.RDate.IsZero() && !dl.IsZero() {
-			backupsToDelete = append(backupsToDelete, bl.Name)
+			if nb := len(backupsToDelete); nb == 0 || backupsToDelete[nb - 1] != bl.Name {
+				backupsToDelete = append(backupsToDelete, bl.Name)
+			}
 		}
 
 		previousBackup = pair
