@@ -134,9 +134,22 @@ func main() {
 			Usage:     "Download backup from remote storage",
 			UsageText: "clickhouse-backup download <backup_name>",
 			Action: func(c *cli.Context) error {
+				if c.Bool("sync") {
+					return chbackup.DownloadSync(*getConfig(c), c.Bool("dry-run"))
+				}
+
 				return chbackup.Download(*getConfig(c), c.Args().First())
 			},
-			Flags: cliapp.Flags,
+			Flags: append(cliapp.Flags,
+				cli.BoolFlag{
+					Name:   "sync",
+					Usage:  "Sync local backups with remote storage",
+				},
+				cli.BoolFlag{
+					Name:   "dry-run",
+					Usage:  "Show what would be done, don't modify anything",
+				},
+			),
 		},
 		{
 			Name:      "restore",

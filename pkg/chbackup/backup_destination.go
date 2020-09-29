@@ -162,11 +162,20 @@ func (bd *BackupDestination) BackupList() ([]Backup, error) {
 	return result, nil
 }
 
-func (bd *BackupDestination) CompressedStreamDownload(remotePath string, localPath string) error {
+func (bd *BackupDestination) CompressedStreamDownload(remotePath string, localPath string, downloadRequired func(string) (string, error)) error {
 	if err := os.MkdirAll(localPath, os.ModePerm); err != nil {
 		return err
 	}
-	archiveName := path.Join(bd.path, fmt.Sprintf("%s.%s", remotePath, getExtension(bd.compressionFormat)))
+
+	var archiveName string
+	compressionFormat, _ := getArchiveFormat(remotePath)
+	if compressionFormat == "" {
+		compressionFormat = bd.compressionFormat
+		archiveName = path.Join(bd.path, fmt.Sprintf("%s.%s", remotePath, getExtension(bd.compressionFormat)))
+	} else {
+		archiveName = path.Join(bd.path, remotePath)
+	}
+
 	if err := bd.Connect(); err != nil {
 		return err
 	}
@@ -188,7 +197,7 @@ func (bd *BackupDestination) CompressedStreamDownload(remotePath string, localPa
 	buf := buffer.New(BufferSize)
 	bufReader := nio.NewReader(reader, buf)
 	proxyReader := bar.NewProxyReader(bufReader)
-	z, _ := getArchiveReader(bd.compressionFormat)
+	z, _ := getArchiveReader(compressionFormat)
 	if err := z.Open(proxyReader, 0); err != nil {
 		return err
 	}
@@ -235,17 +244,25 @@ func (bd *BackupDestination) CompressedStreamDownload(remotePath string, localPa
 			return err
 		}
 	}
+	bar.Finish()
+	var requiredLocalPath string
 	if metafile.RequiredBackup != "" {
-		log.Printf("Backup '%s' required '%s'. Downloading.", remotePath, metafile.RequiredBackup)
-		err := bd.CompressedStreamDownload(metafile.RequiredBackup, filepath.Join(filepath.Dir(localPath), metafile.RequiredBackup))
-		if err != nil && !os.IsExist(err) {
+		log.Printf("Backup '%s' required '%s'.", remotePath, metafile.RequiredBackup)
+		requiredLocalPath, err = downloadRequired(metafile.RequiredBackup)
+		var message string
+		if err == nil {
+			message = "Downloaded %s. Relinking files..."
+		} else if os.IsExist(err) {
+			message = "%s already exists locally. Relinking files..."
+		} else {
 			return fmt.Errorf("can't download '%s': %v", metafile.RequiredBackup, err)
 		}
+		log.Printf(message, metafile.RequiredBackup)
 	}
 	for _, hardlink := range metafile.Hardlinks {
 		newname := filepath.Join(localPath, hardlink)
 		extractDir := filepath.Dir(newname)
-		oldname := filepath.Join(filepath.Dir(localPath), metafile.RequiredBackup, hardlink)
+		oldname := filepath.Join(requiredLocalPath, hardlink)
 		if _, err := os.Stat(extractDir); os.IsNotExist(err) {
 			os.MkdirAll(extractDir, os.ModePerm)
 		}
@@ -253,7 +270,6 @@ func (bd *BackupDestination) CompressedStreamDownload(remotePath string, localPa
 			return err
 		}
 	}
-	bar.Finish()
 	return nil
 }
 

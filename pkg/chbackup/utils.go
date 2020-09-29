@@ -23,6 +23,7 @@ type Backup struct {
 	Name string
 	Size int64
 	Date time.Time
+	Full bool
 }
 
 func cleanDir(dir string) error {
@@ -105,6 +106,53 @@ func copyFile(srcFile string, dstFile string) error {
 	return err
 }
 
+func prepareBackupDir(config Config, dataPath, backupName, tmpName string, cleanShadow bool) (backupPath, backupDest string, err error) {
+	backupPath = path.Join(dataPath, "backup.tmp", tmpName)
+	backupDest = path.Join(dataPath, "backup", backupName)
+	if err = os.MkdirAll(path.Dir(backupDest), os.ModePerm); err != nil {
+		return
+	}
+	if _, err = os.Stat(backupDest); err == nil || !os.IsNotExist(err) {
+		err = os.ErrExist
+		return
+	}
+	if config.AutoCleanMaxRetry != 0 {
+		shadowDir := path.Join(dataPath, "shadow")
+		for i := config.AutoCleanMaxRetry; ; i-- {
+			ok := true
+
+			if _, err = os.Stat(backupPath); os.IsNotExist(err) {
+				// nothing to clean
+			} else if err = os.RemoveAll(backupPath); err == nil {
+				log.Printf("Cleaned up incomplete backup %s.\n", backupPath)
+			} else if !os.IsNotExist(err) {
+				ok = false
+			}
+
+			if !cleanShadow {
+				// don't need to clean shadow
+			} else if _, err = os.Stat(shadowDir); os.IsNotExist(err) {
+				// nothing to clean
+			} else if err = os.RemoveAll(shadowDir); err == nil {
+				log.Printf("Cleaned up shadow directory. Waiting for straggling freeze operations to finish before rechecking...\n")
+				time.Sleep(config.AutoCleanDelay)
+				ok = false
+			} else if !os.IsNotExist(err) {
+				ok = false
+			}
+
+			if ok {
+				break
+			} else if i == 0 {
+				err = fmt.Errorf("can't create backup: auto-clean failed")
+				return
+			}
+		}
+	}
+	err = os.MkdirAll(backupPath, os.ModePerm)
+	return
+}
+
 func GetBackupsToDelete(backups []Backup, keep int) []Backup {
 	if len(backups) > keep {
 		sort.SliceStable(backups, func(i, j int) bool {
@@ -155,30 +203,28 @@ func getExtension(format string) string {
 	return ""
 }
 
+func getArchiveFormat(s string) (string, string) {
+	switch {
+	case strings.HasSuffix(s, ".tar"):     return "tar",   "tar"
+	case strings.HasSuffix(s, ".tar.lz4"): return "lz4",   "tar.lz4"
+	case strings.HasSuffix(s, ".tar.bz2"): return "bzip2", "tar.bz2"
+	case strings.HasSuffix(s, ".tar.gz"):  return "gzip",  "tar.gz"
+	case strings.HasSuffix(s, ".tar.sz"):  return "sz",    "tar.sz"
+	case strings.HasSuffix(s, ".tar.xz"):  return "xz",    "tar.xz"
+	case strings.HasSuffix(s, ".tar.zst"): return "zstd",  "tar.zst"
+	default: return "", ""
+	}
+}
+
 func isArchiveExtension(s string) bool {
-	return false ||
-		strings.HasSuffix(s, ".tar") ||
-		strings.HasSuffix(s, ".tar.lz4") ||
-		strings.HasSuffix(s, ".tar.bz2") ||
-		strings.HasSuffix(s, ".tar.gz") ||
-		strings.HasSuffix(s, ".tar.sz") ||
-		strings.HasSuffix(s, ".tar.xz") ||
-		strings.HasSuffix(s, ".tar.zst")
+	format, _ := getArchiveFormat(s)
+	return format != ""
 }
 
 func stripArchiveExtension(s string) string {
-	switch {
-	case strings.HasSuffix(s, ".tar"):
-		return s[:len(s) - 4]
-	case strings.HasSuffix(s, ".tar.lz4") ||
-	     strings.HasSuffix(s, ".tar.bz2") ||
-	     strings.HasSuffix(s, ".tar.zst"):
-		return s[:len(s) - 8]
-	case strings.HasSuffix(s, ".tar.gz") ||
-	     strings.HasSuffix(s, ".tar.sz") ||
-	     strings.HasSuffix(s, ".tar.xz"):
-		return s[:len(s) - 7]
-	default:
+	if _, extension := getArchiveFormat(s); extension != "" {
+		return s[:len(s) - len(extension) - 1]
+	} else {
 		return ""
 	}
 }

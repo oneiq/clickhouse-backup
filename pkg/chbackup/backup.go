@@ -260,12 +260,15 @@ func ListLocalBackups(config Config) ([]Backup, error) {
 		return nil, ErrUnknownClickhouseDataPath
 	}
 	backupsPath := path.Join(dataPath, "backup")
+	result := []Backup{}
 	d, err := os.Open(backupsPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return result, nil
+		}
 		return nil, err
 	}
 	defer d.Close()
-	result := []Backup{}
 	names, err := d.Readdirnames(-1)
 	if err != nil {
 		return nil, err
@@ -382,45 +385,10 @@ func CreateBackup(config Config, backupName, tablePattern string) error {
 	if dataPath == "" {
 		return ErrUnknownClickhouseDataPath
 	}
-	backupPath := path.Join(dataPath, "backup.tmp")
-	backupDest := path.Join(dataPath, "backup", backupName)
-	if err := os.MkdirAll(path.Dir(backupDest), os.ModePerm); err != nil {
-		return fmt.Errorf("can't create backup: %v", err)
-	}
-	if _, err := os.Stat(backupDest); err == nil || !os.IsNotExist(err) {
+	backupPath, backupDest, err := prepareBackupDir(config, dataPath, backupName, "create", true)
+	if os.IsExist(err) {
 		return fmt.Errorf("backup '%s' already exists", backupName)
-	}
-	if config.AutoCleanMaxRetry != 0 {
-		shadowDir := path.Join(dataPath, "shadow")
-		for i := config.AutoCleanMaxRetry; ; i-- {
-			ok := true
-
-			if _, err := os.Stat(backupPath); os.IsNotExist(err) {
-				// nothing to clean
-			} else if err = os.RemoveAll(backupPath); err == nil {
-				log.Println("Cleaned up incomplete backup.")
-			} else if !os.IsNotExist(err) {
-				ok = false
-			}
-
-			if _, err := os.Stat(shadowDir); os.IsNotExist(err) {
-				// nothing to clean
-			} else if err = os.RemoveAll(shadowDir); err == nil {
-				log.Println("Cleaned up shadow directory. Waiting for straggling freeze operations to finish before rechecking...")
-				time.Sleep(config.AutoCleanDelay)
-				ok = false
-			} else if !os.IsNotExist(err) {
-				ok = false
-			}
-
-			if ok {
-				break
-			} else if i == 0 {
-				return fmt.Errorf("can't create backup: auto-clean failed")
-			}
-		}
-	}
-	if err := os.MkdirAll(backupPath, os.ModePerm); err != nil {
+	} else if err != nil {
 		return fmt.Errorf("can't create backup: %v", err)
 	}
 	log.Printf("Create backup '%s'", backupName)
@@ -583,7 +551,24 @@ type backupPair struct {
 	RDate  time.Time
 }
 
-func UploadSync(config Config, dryRun bool) error {
+func doSync(config Config, dryRun bool,
+	do func(
+		dataPath string,
+		bd       *BackupDestination,
+		backupListLocal   []Backup,
+		backupListRemote  []Backup,
+		addBackupToDelete func(Backup),
+		previousBackup    backupPair,
+		pair             *backupPair,
+	) error,
+	apply func(
+		dataPath string,
+		bd       *BackupDestination,
+		backupListLocal   []Backup,
+		backupListRemote  []Backup,
+		addBackupToDelete func(Backup),
+	) error) error {
+
 	if config.RemoteStorage == "none" {
 		return fmt.Errorf("Sync aborted: RemoteStorage set to \"none\"")
 	}
@@ -618,20 +603,20 @@ func UploadSync(config Config, dryRun bool) error {
 	}
 
 	// NOTE: Sync requires backup names to be date-based
-	// I don't need dates or sizes reported by storage locations
+	// I don't need dates reported by storage locations
 	for i, _ := range backupListLocal {
 		name := backupListLocal[i].Name
 		backupListLocal[i].Date, _ = time.Parse(config.BackupNameFormat, name)
 	}
 	for i, _ := range backupListRemote {
 		name := stripArchiveExtension(backupListRemote[i].Name)
-		full := int64(0)
+		full := false
 		if strings.HasSuffix(name, "-full") {
 			name = name[:len(name) - 5]
-			full = 1
+			full = true
 		}
 		backupListRemote[i].Date, _ = time.Parse(config.BackupNameFormat, name)
-		backupListRemote[i].Size    = full
+		backupListRemote[i].Full    = full
 	}
 	sort.SliceStable(backupListLocal,  func(i, j int) bool {
 		return backupListLocal[i].Date.Before(backupListLocal[j].Date)
@@ -641,39 +626,42 @@ func UploadSync(config Config, dryRun bool) error {
 		// to be able to skip the latter below and avoid creating extra full backups
 		return backupListRemote[i].Date.Before(backupListRemote[j].Date) ||
 			backupListRemote[i].Date == backupListRemote[j].Date &&
-			backupListRemote[i].Size >= backupListRemote[j].Size
+			backupListRemote[i].Full &&!backupListRemote[j].Full
 	})
 
-	var lastFullBackupDate time.Time
 	var previousBackup     backupPair
-	var backupsToDelete    []string
+	var backupsToDelete    []Backup
+
+	mapBackupsToDelete := make(map[string]struct{})
+	addBackupToDelete  := func(backup Backup) {
+		if _, ok := mapBackupsToDelete[backup.Name]; !ok {
+			mapBackupsToDelete[backup.Name] = struct{}{}
+			backupsToDelete = append(backupsToDelete, backup)
+		}
+	}
+
 	il := 0
 	ir := 0
 	for {
 		var dl, dr time.Time
-		var bl, br Backup
 		if il != len(backupListLocal) {
-			bl = backupListLocal[il]
-			dl = bl.Date
+			dl = backupListLocal[il].Date
 			if dl.IsZero() {
-				log.Printf("Skipping unexpected local backup %s\n", bl.Name)
+				log.Printf("Skipping unexpected local backup %s\n", backupListLocal[il].Name)
 				il++
 				continue
 			}
-		} else {
-			if ir != len(backupListRemote) {
-				log.Printf("There are %d more remote backups\n", len(backupListRemote) - ir)
-			}
-			break
 		}
 		if ir != len(backupListRemote) {
-			br = backupListRemote[ir]
-			dr = br.Date
+			dr = backupListRemote[ir].Date
 			if dr.IsZero() {
-				log.Printf("Skipping unexpected remote backup %s\n", br.Name)
+				log.Printf("Skipping unexpected remote backup %s\n", backupListRemote[ir].Name)
 				ir++
 				continue
 			}
+		}
+		if dl.IsZero() && dr.IsZero() {
+			break
 		}
 
 		var pair backupPair
@@ -685,23 +673,74 @@ func UploadSync(config Config, dryRun bool) error {
 			pair.RDate  = dr
 			il++
 			ir++
-		case dl.Before(dr) || dr.IsZero():
+		case !dl.IsZero() && dl.Before(dr) || dr.IsZero():
 			pair.Local  = il
 			pair.LDate  = dl
-			dr = time.Time{}
-			br = Backup{}
 			il++
 		default:
 			pair.Remote = ir
 			pair.RDate  = dr
-			dl = time.Time{}
-			bl = Backup{}
 			ir++
 		}
 
 		log.Printf("%+v\n", pair)
 
-		if !dr.IsZero() && br.Size != 0 {
+		if err = do(dataPath, bd, backupListLocal, backupListRemote, addBackupToDelete, previousBackup, &pair); err != nil {
+			return err
+		}
+
+		previousBackup = pair
+	}
+
+	if apply != nil {
+		if err = apply(dataPath, bd, backupListLocal, backupListRemote, addBackupToDelete); err != nil {
+			return err
+		}
+	}
+
+	sort.SliceStable(backupsToDelete, func(i, j int) bool {
+		return backupsToDelete[i].Date.Before(backupsToDelete[j].Date)
+	})
+
+	if i := len(backupsToDelete) - config.BackupsToKeepLocal; i > 0 {
+		for _, b := range backupsToDelete[:i] {
+			log.Println("Deleting old local backup " + b.Name)
+
+			if !dryRun {
+				os.RemoveAll(path.Join(dataPath, "backup", b.Name))
+			}
+		}
+	}
+
+	log.Println("  Done.")
+	return nil
+}
+
+func UploadSync(config Config, dryRun bool) error {
+	var lastFullBackupDate time.Time
+	return doSync(config, dryRun, func (
+		dataPath string,
+		bd       *BackupDestination,
+		backupListLocal   []Backup,
+		backupListRemote  []Backup,
+		addBackupToDelete func(Backup),
+		previousBackup    backupPair,
+		pair             *backupPair,
+	) error {
+		var err error
+		var bl  Backup
+		var br  Backup
+		dl := pair.LDate
+		dr := pair.RDate
+
+		if !dl.IsZero() {
+			bl = backupListLocal[pair.Local]
+		}
+		if !dr.IsZero() {
+			br = backupListRemote[pair.Remote]
+		}
+
+		if !dr.IsZero() && br.Full {
 			lastFullBackupDate = dr
 		}
 
@@ -722,7 +761,7 @@ func UploadSync(config Config, dryRun bool) error {
 				}
 			}
 
-			if dr.IsZero() || br.Size == 0 {
+			if dr.IsZero() || !br.Full {
 				if lastFullBackupDate.IsZero() || dl.Sub(lastFullBackupDate) >= config.FullBackupInterval {
 					alsoFull = true
 					log.Printf("Uploading %s-full\n", localName)
@@ -748,26 +787,11 @@ func UploadSync(config Config, dryRun bool) error {
 		}
 
 		if !pair.RDate.IsZero() && !dl.IsZero() {
-			if nb := len(backupsToDelete); nb == 0 || backupsToDelete[nb - 1] != bl.Name {
-				backupsToDelete = append(backupsToDelete, bl.Name)
-			}
+			addBackupToDelete(bl)
 		}
 
-		previousBackup = pair
-	}
-
-	if i := len(backupsToDelete) - config.BackupsToKeepLocal; i > 0 {
-		for _, b := range backupsToDelete[:i] {
-			log.Println("Deleting old local backup " + b)
-
-			if !dryRun {
-				os.RemoveAll(path.Join(dataPath, "backup", b))
-			}
-		}
-	}
-
-	log.Println("  Done.")
-	return nil
+		return nil
+	}, nil)
 }
 
 func Upload(config Config, backupName string, diffFrom string) error {
@@ -813,6 +837,128 @@ func Upload(config Config, backupName string, diffFrom string) error {
 	return nil
 }
 
+func DownloadSync(config Config, dryRun bool) error {
+	const MAX = int64(1 << 62)
+	sizeSinceFull  := MAX
+	sizeSinceLocal := MAX
+	var downloadFull  []Backup
+	var downloadLocal []Backup
+	var ilLatest int
+	return doSync(config, dryRun, func (
+		dataPath string,
+		bd       *BackupDestination,
+		backupListLocal   []Backup,
+		backupListRemote  []Backup,
+		addBackupToDelete func(Backup),
+		previousBackup    backupPair,
+		pair             *backupPair,
+	) error {
+		dl := pair.LDate
+		dr := pair.RDate
+
+		if !dl.IsZero() && dr.IsZero() {
+			log.Printf("Skipping unpaired local backup %s\n", backupListLocal[pair.Local].Name)
+			return nil
+		}
+
+		var br Backup
+		if !dr.IsZero() {
+			br = backupListRemote[pair.Remote]
+		}
+
+		if br.Full {
+			sizeSinceFull   = 0
+			downloadFull    = nil
+		}
+		if sizeSinceFull != MAX {
+			sizeSinceFull  += br.Size
+			downloadFull    = append(downloadFull, br)
+		}
+
+		if !dl.IsZero() {
+			sizeSinceLocal  = 0
+			downloadLocal   = nil
+			ilLatest        = pair.Local
+		} else if sizeSinceLocal == MAX {
+			return nil
+		} else if !br.Full {
+			sizeSinceLocal += br.Size
+			downloadLocal   = append(downloadLocal, br)
+		} else if pair.Remote != len(backupListRemote) - 1 && backupListRemote[pair.Remote + 1].Date != dr {
+			// br is a full backup, but there is no matching difference backup for it
+			// reset the local list at this juncture
+			sizeSinceLocal  = MAX
+			downloadLocal   = nil
+		}
+
+		if !dr.IsZero() && !dl.IsZero() {
+			addBackupToDelete(backupListLocal[pair.Local])
+		}
+
+		return nil
+	}, func (
+		dataPath string,
+		bd       *BackupDestination,
+		backupListLocal   []Backup,
+		backupListRemote  []Backup,
+		addBackupToDelete func(Backup),
+	) error {
+		if sizeSinceFull == MAX && sizeSinceLocal == MAX {
+			return fmt.Errorf("No matching local or remote backups exist")
+		}
+		if sizeSinceLocal == 0 {
+			log.Printf("Up to date.\n")
+			return nil
+		}
+		var list []Backup
+		if sizeSinceLocal < sizeSinceFull {
+			log.Printf("Download %d bytes of diffs following local backup %s\n", sizeSinceLocal, backupListLocal[ilLatest].Name)
+			list = downloadLocal
+		} else {
+			log.Printf("Download %d bytes starting from remote backup %s\n", sizeSinceFull, downloadFull[0].Name)
+			list = downloadFull
+		}
+
+		for _, backup := range list {
+			backupName := backup.Name
+			localName  := backup.Date.Format(config.BackupNameFormat)
+
+			log.Printf("Downloading %s to %s...\n", backupName, localName)
+			if !dryRun {
+				backupTmp, backupDest, err := prepareBackupDir(config, dataPath, localName, backupName, false)
+				if os.IsExist(err) {
+					log.Printf("%s suddenly exists?!\n", localName)
+					continue
+				} else if err != nil {
+					return fmt.Errorf("can't create backup: %v", err)
+				}
+
+				if err := bd.CompressedStreamDownload(backupName, backupTmp, func(requiredBackupName string) (string, error) {
+					localPath := path.Join(dataPath, "backup", requiredBackupName)
+					if s, err := os.Stat(localPath); err != nil {
+						return "", err
+					} else if !s.IsDir() {
+						return "", fmt.Errorf("Not a directory")
+					}
+
+					// if the download finishes successfully, it will no longer be necessary to keep this backup locally
+					d, _ := time.Parse(config.BackupNameFormat, requiredBackupName)
+					addBackupToDelete(Backup{Name: requiredBackupName, Date: d})
+					return localPath, os.ErrExist
+				}); err != nil {
+					os.RemoveAll(backupTmp)
+					return err
+				}
+
+				if err := os.Rename(backupTmp, backupDest); err != nil {
+					return fmt.Errorf("cannot commit backup: %v", err)
+				}
+			}
+		}
+		return nil
+	})
+}
+
 func Download(config Config, backupName string) error {
 	if config.RemoteStorage == "none" {
 		fmt.Println("Download aborted: RemoteStorage set to \"none\"")
@@ -835,8 +981,13 @@ func Download(config Config, backupName string) error {
 	if err != nil {
 		return err
 	}
-	err = bd.CompressedStreamDownload(backupName, path.Join(dataPath, "backup", backupName))
-	if err != nil {
+	// use the old assignment trick to create a recursive closure
+	var downloadOuter func(string) (string, error)
+	downloadOuter = func(backupName string) (string, error) {
+		localPath := path.Join(dataPath, "backup", backupName)
+		return localPath, bd.CompressedStreamDownload(backupName, localPath, downloadOuter)
+	}
+	if _, err = downloadOuter(backupName); err != nil {
 		return err
 	}
 	log.Println("  Done.")
