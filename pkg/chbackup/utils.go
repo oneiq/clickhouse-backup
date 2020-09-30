@@ -144,7 +144,7 @@ func prepareBackupDir(config Config, dataPath, backupName, tmpName string, clean
 			if ok {
 				break
 			} else if i == 0 {
-				err = fmt.Errorf("can't create backup: auto-clean failed")
+				err = fmt.Errorf("auto-clean failed")
 				return
 			}
 		}
