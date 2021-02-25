@@ -124,6 +124,10 @@ func (s *AzureBlob) PutFile(key string, r io.ReadCloser) error {
 	}
 
 	_, err := x.UploadStreamToBlockBlob(ctx, r, blob, opts, s.CPK)
+	if err != nil {
+		// clean up any uploaded but uncommitted blocks
+		blob.Delete(ctx, azblob.DeleteSnapshotsOptionInclude, azblob.BlobAccessConditions{})
+	}
 	return err
 }
 
