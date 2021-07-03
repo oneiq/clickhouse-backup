@@ -549,6 +549,7 @@ type backupPair struct {
 	LDate  time.Time
 	Remote int
 	RDate  time.Time
+	RFull  bool
 }
 
 func doSync(config Config, dryRun bool,
@@ -644,6 +645,7 @@ func doSync(config Config, dryRun bool,
 	ir := 0
 	for {
 		var dl, dr time.Time
+		var fr bool
 		if il != len(backupListLocal) {
 			dl = backupListLocal[il].Date
 			if dl.IsZero() {
@@ -654,6 +656,7 @@ func doSync(config Config, dryRun bool,
 		}
 		if ir != len(backupListRemote) {
 			dr = backupListRemote[ir].Date
+			fr = backupListRemote[ir].Full
 			if dr.IsZero() {
 				log.Printf("Skipping unexpected remote backup %s\n", backupListRemote[ir].Name)
 				ir++
@@ -671,6 +674,7 @@ func doSync(config Config, dryRun bool,
 			pair.LDate  = dl
 			pair.Remote = ir
 			pair.RDate  = dr
+			pair.RFull  = fr
 			il++
 			ir++
 		case !dl.IsZero() && dl.Before(dr) || dr.IsZero():
@@ -680,6 +684,7 @@ func doSync(config Config, dryRun bool,
 		default:
 			pair.Remote = ir
 			pair.RDate  = dr
+			pair.RFull  = fr
 			ir++
 		}
 
