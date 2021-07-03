@@ -686,6 +686,13 @@ func doSync(config Config, dryRun bool,
 			pair.RDate  = dr
 			pair.RFull  = fr
 			ir++
+
+			// pair existing local backup with both full and difference remote backups
+			if il == 0 || backupListLocal[il - 1].Date != dr {
+				break
+			}
+			pair.Local  = il - 1
+			pair.LDate  = dr
 		}
 
 		log.Printf("%+v\n", pair)
